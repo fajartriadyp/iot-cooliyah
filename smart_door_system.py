@@ -190,14 +190,16 @@ class SmartDoorLockSystem:
 
     def _rfid_reader_thread(self):
         """Thread untuk membaca RFID."""
+        print("🔍 RFID reader thread started")
         while self.running:
             try:
                 if self.waiting_for_rfid:
+                    print("⏳ Menunggu kartu RFID...")
                     card_uid = self._read_rfid_card()
                     if card_uid:
                         self._process_rfid_card(card_uid)
                 
-                time.sleep(0.1)
+                time.sleep(0.5)  # Slower polling untuk debug
                 
             except Exception as e:
                 print(f"❌ RFID reader error: {e}")
@@ -209,11 +211,13 @@ class SmartDoorLockSystem:
             if self.rfid_serial and self.rfid_serial.in_waiting > 0:
                 rfid_data = self.rfid_serial.readline().decode('utf-8').strip()
                 if rfid_data:
+                    print(f"📡 RFID data received: {rfid_data}")
                     return rfid_data.replace('\r', '').replace('\n', '')
             elif not self.rfid_serial:
-                # Fallback untuk testing (non-blocking input)
-                print("💳 [TEST MODE] Ketik UID kartu (atau Enter untuk skip): ", end='', flush=True)
-                # Implementasi non-blocking input bisa ditambahkan di sini
+                # Fallback untuk testing - simulasi dengan input manual
+                print("💳 [TEST MODE] Simulasi RFID - masukkan UID atau 'skip':")
+                # Untuk testing, kita bisa return test UID
+                # return "1234567890"  # Uncomment untuk test otomatis
                 pass
                 
         except Exception as e:
@@ -238,16 +242,20 @@ class SmartDoorLockSystem:
 
     def _inside_sensor_thread(self):
         """Thread untuk monitor sensor di dalam."""
+        print("🔍 Inside sensor thread started")
         while self.running:
             try:
-                # Sensor no-touch (active low)
-                if not self.inside_no_touch_sensor.is_active and self.is_locked:
+                # Debug sensor state
+                sensor_state = self.inside_no_touch_sensor.is_active
+                
+                # Sensor no-touch (active low - False berarti terdeteksi)
+                if not sensor_state and self.is_locked:
                     print("👆 Sensor no-touch di dalam terdeteksi")
                     with self.lock:
                         self.inside_sensor_unlock = True
                     time.sleep(2)  # Debounce
                     
-                time.sleep(0.1)
+                time.sleep(0.5)  # Slower polling untuk debug
                 
             except Exception as e:
                 print(f"❌ Inside sensor error: {e}")
@@ -255,11 +263,16 @@ class SmartDoorLockSystem:
 
     def _entrance_monitor_thread(self):
         """Thread untuk monitor pintu masuk."""
+        print("🔍 Entrance monitor thread started")
         rfid_start_time = None
         
         while self.running:
             try:
                 distance = self.entrance_ultrasonic.distance * 100
+                
+                # Debug output setiap 5 detik
+                if int(time.time()) % 5 == 0:
+                    print(f"📏 Jarak saat ini: {distance:.1f}cm | Locked: {self.is_locked}")
                 
                 # Deteksi orang di pintu masuk
                 if (distance < self.config['DETECTION_DISTANCE_CM'] and 
@@ -294,7 +307,7 @@ class SmartDoorLockSystem:
                             self.waiting_for_rfid = False
                         rfid_start_time = None
                 
-                time.sleep(0.2)
+                time.sleep(1.0)  # Slower polling untuk debug
                 
             except Exception as e:
                 print(f"❌ Entrance monitor error: {e}")
@@ -399,9 +412,17 @@ class SmartDoorLockSystem:
         print("Flow: Ultrasonic Detection → RFID Tap → Voice Welcome → Door Unlock")
         print("Akses: RFID Card | Inside No-Touch Sensor | Blynk App")
         print("="*70)
+        print("🔄 Main loop started - sistem sedang berjalan...")
 
         try:
+            loop_count = 0
             while self.running:
+                loop_count += 1
+                
+                # Debug output setiap 10 detik
+                if loop_count % 100 == 0:  # setiap 10 detik (0.1s * 100)
+                    print(f"💓 Heartbeat #{loop_count//100} - System running normally")
+                
                 # Proses permintaan unlock
                 with self.lock:
                     # RFID unlock
@@ -446,6 +467,8 @@ class SmartDoorLockSystem:
             print("\n⏹️  Sistem dihentikan oleh user")
         except Exception as e:
             print(f"❌ Error sistem: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.running = False
             self.lock_door()
